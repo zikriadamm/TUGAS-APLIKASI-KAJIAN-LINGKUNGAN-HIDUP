@@ -1,6 +1,7 @@
 const { Sequelize } = require('sequelize');
 const mysql = require('mysql2/promise');
 const path = require('path');
+const fs = require('fs');
 const dotenv = require('dotenv');
 
 dotenv.config();
@@ -12,13 +13,35 @@ const dbHost = process.env.DB_HOST || 'localhost';
 const dbPort = process.env.DB_PORT || 3306;
 const dbDialect = process.env.DB_DIALECT || 'mysql';
 
-let sequelize;
+const getSqlitePath = () => {
+  const defaultPath = path.join(__dirname, '../../database/bank_sampah_palu.sqlite');
+  if (process.env.VERCEL) {
+    const tmpPath = '/tmp/bank_sampah_palu.sqlite';
+    try {
+      if (!fs.existsSync(tmpPath) && fs.existsSync(defaultPath)) {
+        fs.copyFileSync(defaultPath, tmpPath);
+      }
+      return tmpPath;
+    } catch (err) {
+      console.warn('Could not copy sqlite to /tmp:', err.message);
+    }
+  }
+  return defaultPath;
+};
+
+let sequelize = new Sequelize({
+  dialect: 'sqlite',
+  storage: getSqlitePath(),
+  logging: false
+});
 
 const initDatabase = async () => {
+  const sqliteStorage = getSqlitePath();
+
   if (dbDialect === 'sqlite') {
     sequelize = new Sequelize({
       dialect: 'sqlite',
-      storage: path.join(__dirname, '../../database/bank_sampah_palu.sqlite'),
+      storage: sqliteStorage,
       logging: false
     });
     console.log(' Using SQLite database engine');
@@ -26,7 +49,6 @@ const initDatabase = async () => {
   }
 
   try {
-    // Quick ping connection check to MySQL server (2000ms timeout)
     const connection = await mysql.createConnection({
       host: dbHost,
       port: dbPort,
@@ -57,11 +79,11 @@ const initDatabase = async () => {
     return sequelize;
   } catch (error) {
     console.warn(` MySQL connection not available (${error.message}).`);
-    console.warn(' Falling back to embedded SQLite database engine (database/bank_sampah_palu.sqlite)...');
+    console.warn(' Falling back to embedded SQLite database engine...');
     
     sequelize = new Sequelize({
       dialect: 'sqlite',
-      storage: path.join(__dirname, '../../database/bank_sampah_palu.sqlite'),
+      storage: sqliteStorage,
       logging: false
     });
 
@@ -69,12 +91,6 @@ const initDatabase = async () => {
     return sequelize;
   }
 };
-
-sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: path.join(__dirname, '../../database/bank_sampah_palu.sqlite'),
-  logging: false
-});
 
 module.exports = {
   sequelize,

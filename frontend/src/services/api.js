@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://tugas-aplikasi-kajian-lingkungan-hi.vercel.app/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');

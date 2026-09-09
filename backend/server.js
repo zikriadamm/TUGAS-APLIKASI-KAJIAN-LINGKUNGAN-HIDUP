@@ -14,6 +14,39 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Lazy Database initialization for standalone & serverless environments
+let dbInitialized = false;
+let dbInitPromise = null;
+
+const ensureDbInit = async () => {
+  if (dbInitialized) return;
+  if (!dbInitPromise) {
+    dbInitPromise = (async () => {
+      try {
+        await initDatabase();
+        await sequelize.sync();
+        await seedDatabase();
+        dbInitialized = true;
+      } catch (err) {
+        dbInitPromise = null;
+        throw err;
+      }
+    })();
+  }
+  await dbInitPromise;
+};
+
+// Database Init Middleware
+app.use(async (req, res, next) => {
+  try {
+    await ensureDbInit();
+    next();
+  } catch (err) {
+    console.error('Database initialization error:', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada inisialisasi database.', error: err.message });
+  }
+});
+
 // Health Check API
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'API Monitoring Bank Sampah Kota Palu Berjalan Normal.' });
@@ -48,15 +81,7 @@ app.use((err, req, res, next) => {
 // Initialize Server & Database
 const startServer = async () => {
   try {
-    await initDatabase();
-    
-    // Sync models to DB
-    await sequelize.sync();
-    console.log(' Database models synced successfully.');
-
-    // Seed database with Palu data
-    await seedDatabase();
-
+    await ensureDbInit();
     app.listen(PORT, () => {
       console.log(`=============================================================`);
       console.log(` Server Bank Sampah Palu running on http://localhost:${PORT}`);
@@ -67,4 +92,8 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = app;
